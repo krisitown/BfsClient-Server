@@ -1,9 +1,9 @@
 package server;
 
-import javax.swing.*;
 import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.*;
 import java.util.stream.Collectors;
 
@@ -18,24 +18,21 @@ public class BfsSolver {
         LinkedList<Character> queue = new LinkedList<>();
         queue.add(arguments.getStartingNode());
 
-        while (queue.size() != 0) {
-            Character currentNode = queue.poll();
-            List<Character> children = arguments.getGraph().get(currentNode);
-
-            if (children != null) {
-                WorkerThread worker = new WorkerThread(visited, queue, children);
+        do {
+            for (int i = 0; i < queue.size(); i++) {
+                WorkerThread worker = new WorkerThread(visited, queue, arguments.getGraph());
                 Future future = executorService.submit(worker);
                 tasks.add(future);
             }
-        }
 
-        for (Future future : tasks) {
-            try {
-                future.get(40, TimeUnit.SECONDS); //wait 40 seconds MAX for each task to complete
-            } catch (InterruptedException | ExecutionException | TimeoutException e) {
-                e.printStackTrace();
+            for (Future task : tasks) {
+                try {
+                    task.get(40, TimeUnit.SECONDS); //wait 40 seconds MAX for each task to complete
+                } catch (InterruptedException | ExecutionException | TimeoutException e) {
+                    e.printStackTrace();
+                }
             }
-        }
+        } while (queue.size() != 0); //after waiting for the futures to complete there might be new entries in the queue
 
         return visited.stream().map(Object::toString).collect(Collectors.toList());
     }
@@ -43,20 +40,24 @@ public class BfsSolver {
     class WorkerThread implements Runnable {
         private List<Character> visited;
         private LinkedList<Character> queue;
-        private List<Character> children;
+        private Map<Character, List<Character>> graph;
 
-        public WorkerThread(List<Character> visited, LinkedList<Character> queue, List<Character> children) {
+        public WorkerThread(List<Character> visited, LinkedList<Character> queue, Map<Character, List<Character>> graph) {
             this.visited = visited;
             this.queue = queue;
-            this.children = children;
+            this.graph = graph;
         }
 
         @Override
         public void run() {
-            for (Character child : children) {
-                if (!visited.contains(child)) {
-                    visited.add(child);
-                    queue.add(child);
+            Character currentNode = queue.poll();
+            List<Character> children = graph.get(currentNode);
+            if(children != null) {
+                for (Character child : children) {
+                    if (!visited.contains(child)) {
+                        visited.add(child);
+                        queue.add(child);
+                    }
                 }
             }
         }
